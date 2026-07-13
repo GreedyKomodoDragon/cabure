@@ -1,0 +1,8 @@
+domain: cabure.io
+layout: go.kubebuilder.io/v4
+projectName: cabure
+repo: github.com/GreedyKomodoDragon/cabure
+resources:
+  - group: gitops
+    kind: GitApplication
+    version: v1alpha1

@@ -1,0 +1,66 @@
+{{- $ns := include "cabure.namespace" . -}}
+{{- $sa := include "cabure.serviceAccountName" . -}}
+{{- $generated := fromYaml (.Files.Get "files/rbac.yaml") -}}
+{{- $rules := $generated.rules | default (list) -}}
+{{- $clusterRules := list -}}
+{{- if .Values.operator.allowClusterScopedResources }}
+{{- $clusterRules = list
+  (dict "apiGroups" (list "") "resources" (list "namespaces") "verbs" (list "get" "list" "watch" "create" "update" "patch" "delete"))
+  (dict "apiGroups" (list "rbac.authorization.k8s.io") "resources" (list "clusterroles" "clusterrolebindings") "verbs" (list "get" "list" "watch" "create" "update" "patch" "delete"))
+  (dict "apiGroups" (list "apiextensions.k8s.io") "resources" (list "customresourcedefinitions") "verbs" (list "get" "list" "watch" "create" "update" "patch" "delete"))
+-}}
+{{- end }}
+{{- if and .Values.operator.watchNamespace (not .Values.operator.allowClusterScopedResources) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "cabure.fullname" . }}
+  namespace: {{ .Values.operator.watchNamespace }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+rules:
+  {{- toYaml $rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "cabure.fullname" . }}
+  namespace: {{ .Values.operator.watchNamespace }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "cabure.fullname" . }}
+{{- else }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cabure.fullname" . }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+rules:
+  {{- toYaml $rules | nindent 2 }}
+{{- if .Values.operator.allowClusterScopedResources }}
+  {{- toYaml $clusterRules | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cabure.fullname" . }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cabure.fullname" . }}
+{{- end }}

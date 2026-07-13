@@ -1,0 +1,166 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gitapplications.gitops.cabure.io
+spec:
+  group: gitops.cabure.io
+  names:
+    kind: GitApplication
+    listKind: GitApplicationList
+    plural: gitapplications
+    singular: gitapplication
+    shortNames:
+      - ga
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Revision
+          type: string
+          jsonPath: .status.appliedRevision
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - source
+                - destination
+                - render
+              properties:
+                source:
+                  type: object
+                  required:
+                    - repository
+                    - path
+                  properties:
+                    repository:
+                      type: string
+                      pattern: ^(https://.+|ssh://.+|[^@]+@[^:]+:.+)$
+                    revision:
+                      type: string
+                      default: main
+                    path:
+                      type: string
+                      minLength: 1
+                    secretRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                destination:
+                  type: object
+                  required:
+                    - namespace
+                  properties:
+                    namespace:
+                      type: string
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                render:
+                  type: object
+                  required:
+                    - type
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - yaml
+                        - helm
+                    helm:
+                      type: object
+                      required:
+                        - releaseName
+                      properties:
+                        releaseName:
+                          type: string
+                          minLength: 1
+                        valuesFiles:
+                          type: array
+                          items:
+                            type: string
+                        includeCRDs:
+                          type: boolean
+                allowedClusterScopedKinds:
+                  type: array
+                  items:
+                    type: string
+                takeoverExistingResources:
+                  type: boolean
+                interval:
+                  type: string
+                  default: 1m
+                prune:
+                  type: boolean
+                  default: false
+                suspend:
+                  type: boolean
+                  default: false
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                attemptedRevision:
+                  type: string
+                appliedRevision:
+                  type: string
+                lastAttemptTime:
+                  type: string
+                  format: date-time
+                lastSuccessTime:
+                  type: string
+                  format: date-time
+                inventory:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - version
+                      - kind
+                      - name
+                    properties:
+                      group:
+                        type: string
+                      version:
+                        type: string
+                      kind:
+                        type: string
+                      namespace:
+                        type: string
+                      name:
+                        type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                      - lastTransitionTime
+                      - reason
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}

@@ -1,0 +1,18 @@
+{{- if .Values.cache.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "cabure.fullname" . }}-cache
+  namespace: {{ include "cabure.namespace" . }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.cache.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.cache.persistence.size }}
+  {{- if .Values.cache.persistence.storageClass }}
+  storageClassName: {{ .Values.cache.persistence.storageClass }}
+  {{- end }}
+{{- end }}

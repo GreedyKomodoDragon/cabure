@@ -1,0 +1,75 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/greedykomododragon/cabure
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: false
+  name: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+leaderElection:
+  enabled: true
+
+operator:
+  watchNamespace: ""
+  logLevel: info
+  concurrentReconciles: 2
+  minimumRequeueInterval: 15s
+  allowClusterScopedResources: false
+  allowedRepositoryPrefixes: []
+  fieldManager: tiny-gitops-controller
+  cacheDir: /cache
+
+cache:
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+
+metrics:
+  enabled: true
+  service:
+    enabled: true
+  serviceMonitor:
+    enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+networkPolicy:
+  enabled: false

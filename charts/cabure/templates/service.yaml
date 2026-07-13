@@ -1,0 +1,16 @@
+{{- if and .Values.metrics.enabled .Values.metrics.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cabure.fullname" . }}-metrics
+  namespace: {{ include "cabure.namespace" . }}
+  labels:
+    {{- include "cabure.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "cabure.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+{{- end }}
