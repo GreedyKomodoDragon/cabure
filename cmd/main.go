@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -134,12 +135,16 @@ type operatorOptions struct {
 }
 
 type operatorRunner struct {
-	reconciler *controller.GitApplicationReconciler
+	reconciler reconciler
 	informer   toolscache.SharedIndexInformer
 	queue      workqueue.TypedRateLimitingInterface[string]
 	workers    int
 	log        logr.Logger
 	ready      *atomic.Bool
+}
+
+type reconciler interface {
+	Reconcile(context.Context, ctrl.Request) (ctrl.Result, error)
 }
 
 func newOperatorRunner(cfg *rest.Config, opts operatorOptions) (*operatorRunner, error) {
@@ -228,6 +233,10 @@ func (r *operatorRunner) run(ctx context.Context) error {
 	}
 
 	r.ready.Store(true)
+	go func() {
+		<-ctx.Done()
+		r.queue.ShutDown()
+	}()
 
 	var workers sync.WaitGroup
 	workers.Add(r.workers)
@@ -252,6 +261,12 @@ func (r *operatorRunner) runWorker(ctx context.Context) {
 
 		func() {
 			defer r.queue.Done(key)
+			defer func() {
+				if rec := recover(); rec != nil {
+					r.log.Error(fmt.Errorf("panic: %v", rec), "panic during reconciliation", "key", key, "stack", string(debug.Stack()))
+					r.queue.AddRateLimited(key)
+				}
+			}()
 
 			namespace, name, err := toolscache.SplitMetaNamespaceKey(key)
 			if err != nil {
@@ -267,6 +282,9 @@ func (r *operatorRunner) runWorker(ctx context.Context) {
 				},
 			})
 			if err != nil {
+				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+					return
+				}
 				r.log.Error(err, "reconciliation failed", "namespace", namespace, "name", name)
 				r.queue.AddRateLimited(key)
 				return

@@ -74,9 +74,9 @@ func (r *GitApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, r.fail(ctx, &app, "policy validation", err, true)
 	}
 
-	creds, err := r.loadCredentials(ctx, &app)
+	creds, stalled, err := r.loadCredentials(ctx, &app)
 	if err != nil {
-		return ctrl.Result{}, r.fail(ctx, &app, "source fetch", err, false)
+		return ctrl.Result{}, r.fail(ctx, &app, "source fetch", err, stalled)
 	}
 
 	checkoutDir, sha, err := r.Repo.Checkout(ctx, app.Spec.Source.Repository, app.Spec.Source.Revision, creds)
@@ -139,8 +139,8 @@ func (r *GitApplicationReconciler) concurrentReconciles() int {
 }
 
 func validateSpec(app *v1alpha1.GitApplication, cfg OperatorConfig) error {
-	if app.Spec.Interval.Duration < 15*time.Second {
-		return fmt.Errorf("interval must be at least 15s")
+	if app.Spec.Interval.Duration < minimumRequeueInterval(cfg) {
+		return fmt.Errorf("interval must be at least %s", minimumRequeueInterval(cfg))
 	}
 	if app.Spec.Source.Repository == "" || !isSupportedRepositoryURL(app.Spec.Source.Repository) {
 		return fmt.Errorf("repository must use https, ssh://, or scp-style ssh")
@@ -224,6 +224,13 @@ func fieldManagerOrDefault(value string) string {
 	return value
 }
 
+func minimumRequeueInterval(cfg OperatorConfig) time.Duration {
+	if cfg.MinimumRequeueInterval <= 0 {
+		return 15 * time.Second
+	}
+	return cfg.MinimumRequeueInterval
+}
+
 func (r *GitApplicationReconciler) render(ctx context.Context, app *v1alpha1.GitApplication, checkoutDir, sha string) ([]*unstructured.Unstructured, error) {
 	switch app.Spec.Render.Type {
 	case "yaml":
@@ -235,32 +242,32 @@ func (r *GitApplicationReconciler) render(ctx context.Context, app *v1alpha1.Git
 	}
 }
 
-func (r *GitApplicationReconciler) loadCredentials(ctx context.Context, app *v1alpha1.GitApplication) (*git.Credentials, error) {
+func (r *GitApplicationReconciler) loadCredentials(ctx context.Context, app *v1alpha1.GitApplication) (*git.Credentials, bool, error) {
 	if app.Spec.Source.SecretRef == nil || app.Spec.Source.SecretRef.Name == "" {
-		return nil, nil
+		return nil, false, nil
 	}
 	var secret corev1.Secret
 	if r.Kube == nil {
-		return nil, fmt.Errorf("secret client is not configured")
+		return nil, true, fmt.Errorf("secret client is not configured")
 	}
 	secretObj, err := r.Kube.CoreV1().Secrets(app.Namespace).Get(ctx, app.Spec.Source.SecretRef.Name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("read credentials secret: %w", err)
+		return nil, apierrors.IsNotFound(err), fmt.Errorf("read credentials secret: %w", err)
 	}
 	secret = *secretObj
 	if secret.Type == corev1.SecretTypeSSHAuth || len(secret.Data["ssh-privatekey"]) > 0 {
 		privateKey := secret.Data["ssh-privatekey"]
 		if len(privateKey) == 0 {
-			return nil, fmt.Errorf("ssh secret %s/%s is missing ssh-privatekey", secret.Namespace, secret.Name)
+			return nil, true, fmt.Errorf("ssh secret %s/%s is missing ssh-privatekey", secret.Namespace, secret.Name)
 		}
 		knownHosts := secret.Data["known_hosts"]
 		if len(knownHosts) == 0 {
-			return nil, fmt.Errorf("ssh secret %s/%s is missing known_hosts", secret.Namespace, secret.Name)
+			return nil, true, fmt.Errorf("ssh secret %s/%s is missing known_hosts", secret.Namespace, secret.Name)
 		}
 		return &git.Credentials{
 			SSHPrivateKey: privateKey,
 			KnownHosts:    knownHosts,
-		}, nil
+		}, false, nil
 	}
 	username := string(secret.Data["username"])
 	password := string(secret.Data["password"])
@@ -268,7 +275,10 @@ func (r *GitApplicationReconciler) loadCredentials(ctx context.Context, app *v1a
 	if password == "" {
 		password = token
 	}
-	return &git.Credentials{Username: username, Password: password, Token: token}, nil
+	if password == "" {
+		return nil, true, fmt.Errorf("credentials secret %s/%s must include ssh-privatekey, password, or token", secret.Namespace, secret.Name)
+	}
+	return &git.Credentials{Username: username, Password: password, Token: token}, false, nil
 }
 
 func (r *GitApplicationReconciler) prune(ctx context.Context, app *v1alpha1.GitApplication, desired []v1alpha1.ResourceReference) error {
@@ -356,11 +366,7 @@ func (r *GitApplicationReconciler) updateSuspended(ctx context.Context, app *v1a
 	if err := r.Status().Patch(ctx, app, client.MergeFrom(base)); err != nil {
 		return ctrl.Result{}, err
 	}
-	interval := r.Config.MinimumRequeueInterval
-	if interval <= 0 {
-		interval = 15 * time.Second
-	}
-	return ctrl.Result{RequeueAfter: interval}, nil
+	return ctrl.Result{RequeueAfter: minimumRequeueInterval(r.Config)}, nil
 }
 
 func setCondition(conditions *[]metav1.Condition, condition metav1.Condition) {

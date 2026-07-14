@@ -25,6 +25,23 @@ func TestValidateSpecRejectsShortInterval(t *testing.T) {
 	}
 }
 
+func TestValidateSpecHonorsConfiguredMinimumInterval(t *testing.T) {
+	app := &v1alpha1.GitApplication{
+		Spec: v1alpha1.GitApplicationSpec{
+			Source: v1alpha1.GitSourceSpec{
+				Repository: "https://example.com/repo.git",
+				Path:       "apps/demo",
+			},
+			Destination: v1alpha1.DestinationSpec{Namespace: "demo"},
+			Render:      v1alpha1.RenderSpec{Type: "yaml"},
+			Interval:    metav1.Duration{Duration: 10 * time.Second},
+		},
+	}
+	if err := validateSpec(app, OperatorConfig{MinimumRequeueInterval: 5 * time.Second}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestValidateSpecAcceptsHelm(t *testing.T) {
 	app := &v1alpha1.GitApplication{
 		Spec: v1alpha1.GitApplicationSpec{

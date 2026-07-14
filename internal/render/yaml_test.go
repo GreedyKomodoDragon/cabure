@@ -1,6 +1,7 @@
 package render
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ metadata:
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	objs, err := renderYAMLFile(path)
+	objs, err := renderYAMLFile(context.Background(), path)
 	if err != nil {
 		t.Fatalf("renderYAMLFile: %v", err)
 	}

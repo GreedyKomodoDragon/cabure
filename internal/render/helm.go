@@ -24,7 +24,10 @@ import (
 type HelmRenderer struct{}
 
 func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1alpha1.GitApplicationSpec, resolvedRevision string) ([]*unstructured.Unstructured, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	_ = resolvedRevision
 	appRoot, err := ResolveWithinRoot(checkoutRoot, spec.Source.Path)
 	if err != nil {
 		return nil, err
@@ -36,7 +39,10 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	if err != nil {
 		return nil, fmt.Errorf("load chart: %w", err)
 	}
-	values, err := readHelmValues(appRoot, spec.Render.Helm.ValuesFiles)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	values, err := readHelmValues(ctx, appRoot, spec.Render.Helm.ValuesFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +56,9 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	if err != nil {
 		return nil, fmt.Errorf("prepare render values: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	manifests, err := engine.Render(ch, renderVals)
 	if err != nil {
 		return nil, fmt.Errorf("render chart: %w", err)
@@ -61,7 +70,10 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 			return crds[i].Filename < crds[j].Filename
 		})
 		for _, crd := range crds {
-			docObjs, err := decodeManifest(crd.Filename, string(crd.File.Data))
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			docObjs, err := decodeManifest(ctx, crd.Filename, string(crd.File.Data))
 			if err != nil {
 				return nil, err
 			}
@@ -77,7 +89,10 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
-		docObjs, err := decodeManifest(name, manifests[name])
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		docObjs, err := decodeManifest(ctx, name, manifests[name])
 		if err != nil {
 			return nil, err
 		}
@@ -86,9 +101,12 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	return out, nil
 }
 
-func readHelmValues(appRoot string, files []string) (chartutil.Values, error) {
+func readHelmValues(ctx context.Context, appRoot string, files []string) (chartutil.Values, error) {
 	merged := chartutil.Values{}
 	for _, rel := range files {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		path, err := ResolveWithinRoot(appRoot, rel)
 		if err != nil {
 			return nil, err
@@ -137,10 +155,13 @@ func deepMerge(dst chartutil.Values, src chartutil.Values) {
 	}
 }
 
-func decodeManifest(source, manifest string) ([]*unstructured.Unstructured, error) {
+func decodeManifest(ctx context.Context, source, manifest string) ([]*unstructured.Unstructured, error) {
 	reader := utilyaml.NewYAMLReader(bufio.NewReader(strings.NewReader(manifest)))
 	var out []*unstructured.Unstructured
 	for docIndex := 0; ; docIndex++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		doc, err := reader.Read()
 		if err != nil {
 			if errors.Is(err, io.EOF) {

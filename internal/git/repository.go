@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -60,7 +61,7 @@ func (r Repository) Checkout(ctx context.Context, repoURL, revision string, cred
 	if auth != nil && auth.cleanup != nil {
 		defer auth.cleanup()
 	}
-	if err := r.withLock(mirrorDir+".lock", 30*time.Second, func() error {
+	if err := r.withLock(mirrorDir+".lockfile", 30*time.Second, func() error {
 		if err := r.ensureMirror(ctx, mirrorDir, repoURL, auth); err != nil {
 			return err
 		}
@@ -76,7 +77,7 @@ func (r Repository) Checkout(ctx context.Context, repoURL, revision string, cred
 	if st, err := os.Stat(finalDir); err == nil && st.IsDir() {
 		return finalDir, sha, nil
 	}
-	if err := r.withLock(finalDir+".lock", 30*time.Second, func() error {
+	if err := r.withLock(finalDir+".lockfile", 30*time.Second, func() error {
 		if st, err := os.Stat(finalDir); err == nil && st.IsDir() {
 			return nil
 		}
@@ -309,11 +310,21 @@ func (r Repository) cacheRoot() string {
 func (r Repository) withLock(path string, timeout time.Duration, fn func() error) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		if err := os.Mkdir(path, 0o755); err == nil {
-			defer os.Remove(path)
-			return fn()
-		} else if !os.IsExist(err) {
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
 			return err
+		}
+		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
+			defer func() {
+				_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+				_ = file.Close()
+			}()
+			return fn()
+		} else {
+			_ = file.Close()
+			if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+				return err
+			}
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out waiting for lock %s", path)
