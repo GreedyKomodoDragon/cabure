@@ -54,7 +54,7 @@ func TestValidateSpecAcceptsHelm(t *testing.T) {
 				Type: "helm",
 				Helm: &v1alpha1.HelmRenderSpec{
 					ReleaseName: "demo",
-					ValuesFiles: []string{"values.yaml"},
+					ValuesFiles: []string{"infra/dev-overrides/values.yaml"},
 				},
 			},
 			Interval: metav1.Duration{Duration: time.Minute},
@@ -62,6 +62,52 @@ func TestValidateSpecAcceptsHelm(t *testing.T) {
 	}
 	if err := validateSpec(app, OperatorConfig{}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSpecAcceptsHelmSiblingOverlayValues(t *testing.T) {
+	app := &v1alpha1.GitApplication{
+		Spec: v1alpha1.GitApplicationSpec{
+			Source: v1alpha1.GitSourceSpec{
+				Repository: "https://example.com/repo.git",
+				Path:       "infra/database-charts/dragonfly",
+			},
+			Destination: v1alpha1.DestinationSpec{Namespace: "dragonfly"},
+			Render: v1alpha1.RenderSpec{
+				Type: "helm",
+				Helm: &v1alpha1.HelmRenderSpec{
+					ReleaseName: "dragonfly",
+					ValuesFiles: []string{"infra/dev-overrides/dragonfly-dev.yaml"},
+				},
+			},
+			Interval: metav1.Duration{Duration: time.Minute},
+		},
+	}
+	if err := validateSpec(app, OperatorConfig{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSpecRejectsRelativeTraversalValues(t *testing.T) {
+	app := &v1alpha1.GitApplication{
+		Spec: v1alpha1.GitApplicationSpec{
+			Source: v1alpha1.GitSourceSpec{
+				Repository: "https://example.com/repo.git",
+				Path:       "infra/database-charts/dragonfly",
+			},
+			Destination: v1alpha1.DestinationSpec{Namespace: "dragonfly"},
+			Render: v1alpha1.RenderSpec{
+				Type: "helm",
+				Helm: &v1alpha1.HelmRenderSpec{
+					ReleaseName: "dragonfly",
+					ValuesFiles: []string{"../../dev-overrides/dragonfly-dev.yaml"},
+				},
+			},
+			Interval: metav1.Duration{Duration: time.Minute},
+		},
+	}
+	if err := validateSpec(app, OperatorConfig{}); err == nil {
+		t.Fatal("expected validation error")
 	}
 }
 

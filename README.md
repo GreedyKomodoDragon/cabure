@@ -23,7 +23,7 @@ helm upgrade --install cabure \
 
 ## Values
 
-Values under `spec.render.helm.valuesFiles` are resolved relative to the application path inside the checkout.
+Values under `spec.render.helm.valuesFiles` are resolved relative to the repository checkout root and must stay within the checkout. Use repo-root paths such as `infra/dev-overrides/...`; parent traversal like `../` is rejected.
 
 ## Git sources
 

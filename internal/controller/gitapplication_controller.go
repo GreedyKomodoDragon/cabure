@@ -177,7 +177,7 @@ func validateSpec(app *v1alpha1.GitApplication, cfg OperatorConfig) error {
 			return fmt.Errorf("render.helm.releaseName is required")
 		}
 		for _, vf := range app.Spec.Render.Helm.ValuesFiles {
-			if err := validateRelPath(vf); err != nil {
+			if err := validateValuesFilePath(vf); err != nil {
 				return fmt.Errorf("render.helm.valuesFiles: %w", err)
 			}
 		}
@@ -204,6 +204,26 @@ func validateRelPath(path string) error {
 	clean := filepath.Clean(path)
 	if strings.HasPrefix(clean, "..") || filepath.IsAbs(path) {
 		return fmt.Errorf("path escapes checkout root")
+	}
+	return nil
+}
+
+func validateValuesFilePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path is required")
+	}
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("path must be relative to the repository root")
+	}
+	clean := filepath.Clean(path)
+	if clean == "." {
+		return fmt.Errorf("path must point to a file")
+	}
+	if clean != path {
+		return fmt.Errorf("path must be a clean repository-relative path")
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path must stay within the repository root")
 	}
 	return nil
 }

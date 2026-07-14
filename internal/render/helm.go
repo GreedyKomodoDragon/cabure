@@ -42,7 +42,7 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	values, err := readHelmValues(ctx, appRoot, spec.Render.Helm.ValuesFiles)
+	values, err := readHelmValues(ctx, checkoutRoot, spec.Render.Helm.ValuesFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -101,13 +101,16 @@ func (r HelmRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	return out, nil
 }
 
-func readHelmValues(ctx context.Context, appRoot string, files []string) (chartutil.Values, error) {
+func readHelmValues(ctx context.Context, checkoutRoot string, files []string) (chartutil.Values, error) {
 	merged := chartutil.Values{}
 	for _, rel := range files {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		path, err := ResolveWithinRoot(appRoot, rel)
+		if rel == "" {
+			return nil, fmt.Errorf("values file path is required")
+		}
+		path, err := ResolveWithinRoot(checkoutRoot, rel)
 		if err != nil {
 			return nil, err
 		}
