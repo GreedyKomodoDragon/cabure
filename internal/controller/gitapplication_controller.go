@@ -366,9 +366,14 @@ func (r *GitApplicationReconciler) fail(ctx context.Context, app *v1alpha1.GitAp
 	base := app.DeepCopy()
 	app.Status.ObservedGeneration = app.Generation
 	app.Status.LastAttemptTime = &now
+	stalledStatus := metav1.ConditionFalse
+	stalledReason := stageReason(stage)
+	stalledMessage := ""
 	if stalled {
-		setCondition(&app.Status.Conditions, metav1.Condition{Type: "Stalled", Status: metav1.ConditionTrue, Reason: stageReason(stage), Message: stage + ": " + err.Error(), ObservedGeneration: app.Generation, LastTransitionTime: now})
+		stalledStatus = metav1.ConditionTrue
+		stalledMessage = stage + ": " + err.Error()
 	}
+	setCondition(&app.Status.Conditions, metav1.Condition{Type: "Stalled", Status: stalledStatus, Reason: stalledReason, Message: stalledMessage, ObservedGeneration: app.Generation, LastTransitionTime: now})
 	setCondition(&app.Status.Conditions, metav1.Condition{Type: "Reconciling", Status: metav1.ConditionFalse, Reason: stageReason(stage), Message: stage + ": " + err.Error(), ObservedGeneration: app.Generation, LastTransitionTime: now})
 	setCondition(&app.Status.Conditions, metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse, Reason: stageReason(stage), Message: stage + ": " + err.Error(), ObservedGeneration: app.Generation, LastTransitionTime: now})
 	if updateErr := r.Status().Patch(ctx, app, client.MergeFrom(base)); updateErr != nil {
