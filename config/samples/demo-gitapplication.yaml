@@ -1,0 +1,16 @@
+apiVersion: gitops.cabure.io/v1alpha1
+kind: GitApplication
+metadata:
+  name: demo
+  namespace: cabure-system
+spec:
+  source:
+    repository: https://github.com/example/platform-config.git
+    revision: main
+    path: apps/demo
+  destination:
+    namespace: demo
+  render:
+    type: yaml
+  interval: 1m0s
+  prune: true
