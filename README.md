@@ -52,23 +52,13 @@ For more detail, see [docs/architecture.md](./docs/architecture.md).
 
 - Kubernetes cluster access with privileges to install CRDs, RBAC, and the operator.
 - Helm 3.
-- A published Cabure image reachable by your cluster. The default chart values point at `ghcr.io/greedykomododragon/cabure`.
+- A Cabure image reachable by your cluster. Set `image.repository` and `image.tag` in the Helm chart values for your environment.
 
 ### Install from the local chart
 
 ```bash
 helm upgrade --install cabure \
   ./charts/cabure \
-  --namespace cabure-system \
-  --create-namespace
-```
-
-### Install from an OCI chart release
-
-```bash
-helm upgrade --install cabure \
-  oci://ghcr.io/greedykomododragon/charts/cabure \
-  --version <version> \
   --namespace cabure-system \
   --create-namespace
 ```
