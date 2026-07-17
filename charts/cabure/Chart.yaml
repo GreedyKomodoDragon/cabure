@@ -4,3 +4,12 @@ description: Tiny GitOps operator
 type: application
 version: 0.1.0
 appVersion: 0.1.0
+home: https://github.com/GreedyKomodoDragon/cabure
+sources:
+  - https://github.com/GreedyKomodoDragon/cabure
+keywords:
+  - gitops
+  - kubernetes
+  - operator
+annotations:
+  licenses: AGPL-3.0-only

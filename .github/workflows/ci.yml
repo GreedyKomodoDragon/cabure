@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TMPDIR: ${{ github.workspace }}/.gotmp
+      GOCACHE: ${{ github.workspace }}/.cache/go-build
+      GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: azure/setup-helm@v4
+
+      - name: Prepare workspace caches
+        run: mkdir -p "$TMPDIR" "$GOCACHE" "$GOMODCACHE"
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Lint Helm chart
+        run: helm lint charts/cabure
+
+      - name: Render Helm chart
+        run: helm template cabure charts/cabure --namespace cabure-system
