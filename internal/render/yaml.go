@@ -22,18 +22,24 @@ import (
 type YAMLRenderer struct{}
 
 func (r YAMLRenderer) Render(ctx context.Context, checkoutRoot string, spec v1alpha1.GitApplicationSpec, resolvedRevision string) ([]*unstructured.Unstructured, error) {
-	_ = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	_ = resolvedRevision
 	appRoot, err := ResolveWithinRoot(checkoutRoot, spec.Source.Path)
 	if err != nil {
 		return nil, err
 	}
-	paths, err := yamlFiles(appRoot)
+	paths, err := yamlFiles(ctx, appRoot)
 	if err != nil {
 		return nil, err
 	}
 	var out []*unstructured.Unstructured
 	for _, path := range paths {
-		objs, err := renderYAMLFile(path)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		objs, err := renderYAMLFile(ctx, path)
 		if err != nil {
 			return nil, err
 		}
@@ -42,9 +48,12 @@ func (r YAMLRenderer) Render(ctx context.Context, checkoutRoot string, spec v1al
 	return out, nil
 }
 
-func yamlFiles(root string) ([]string, error) {
+func yamlFiles(ctx context.Context, root string) ([]string, error) {
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -67,7 +76,7 @@ func yamlFiles(root string) ([]string, error) {
 	return paths, nil
 }
 
-func renderYAMLFile(path string) ([]*unstructured.Unstructured, error) {
+func renderYAMLFile(ctx context.Context, path string) ([]*unstructured.Unstructured, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -75,6 +84,9 @@ func renderYAMLFile(path string) ([]*unstructured.Unstructured, error) {
 	reader := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(content)))
 	var out []*unstructured.Unstructured
 	for docIndex := 0; ; docIndex++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		doc, err := reader.Read()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
